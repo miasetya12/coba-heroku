@@ -5,6 +5,7 @@ dnspython==2.7.0
 et_xmlfile==2.0.0
 Flask==2.0.1
 Flask-Cors==5.0.0
+gensim==4.3.3
 gunicorn==20.1.0
 itsdangerous==2.0.1
 Jinja2==3.0.1
