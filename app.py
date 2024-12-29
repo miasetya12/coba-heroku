@@ -24,7 +24,9 @@ nltk.download('stopwords')
 
 app = Flask(__name__)
 CORS(app)
-client= MongoClient('mongodb://new_user:user_password@152.42.250.104:27017/?authSource=admin')
+# client= MongoClient('mongodb://new_user:user_password@152.42.250.104:27017/?authSource=admin')
+
+client= MongoClient('mongodb://new_user:user_password@134.209.103.63:27017/?authSource=admin')
 
 
 db = client['makeup_product']
