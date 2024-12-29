@@ -19,8 +19,8 @@ from nltk.corpus import stopwords
 import pandas as pd
 
 # Pastikan NLTK komponen yang diperlukan telah di-download
-# nltk.download('punkt')
-# nltk.download('stopwords')
+nltk.download('punkt')
+nltk.download('stopwords')
 
 app = Flask(__name__)
 CORS(app)
