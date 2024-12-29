@@ -1,3 +1,2 @@
 punkt_tab
 stopwords
-wordnet
