@@ -26,8 +26,8 @@ app = Flask(__name__)
 CORS(app)
 # client= MongoClient('mongodb://new_user:user_password@152.42.250.104:27017/?authSource=admin')
 
-# client= MongoClient('mongodb://new_user:user_password@134.209.103.63:27017/?authSource=admin')
-client= MongoClient('mongodb://localhost:27017/')
+client= MongoClient('mongodb://new_user:user_password@188.166.182.4:27017/?authSource=admin')
+# client= MongoClient('mongodb://localhost:27017/')
 
 db = client['makeup_product']
 collection =  db['desc_product_full']
