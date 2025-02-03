@@ -418,7 +418,7 @@ microsmooth,micro smooth
 minimal,mini
 minimattes,mini
 minimize,mini
-minimizermini
+minimizer,mini
 minimizes,mini
 minimizing,mini
 minimum,mini
@@ -430,17 +430,18 @@ mixable,mix
 mixture,mix
 mixtures,mix
 moccachino,mochaccino
-moiste,moits
-moisten,moits
-moister,moits
-moistpome,moits
-moisture,moits
-moisturize,moits
-moisturized,moits
-moisturizer,moits
-moisturizers,moits
-moisturizes,moits
-moisturizing,moits
+moits,moist
+moiste,moist
+moisten,moist
+moister,moist
+moistpome,moist
+moisture,moist
+moisturize,moist
+moisturized,moist
+moisturizer,moist
+moisturizers,moist
+moisturizes,moist
+moisturizing,moist
 molecular,molecules
 mosturizer,moist
 mosturizing,moist
@@ -714,9 +715,9 @@ sparklips,sparkle
 sparkly,sparkle
 sparks,sparkle
 specialty,special
-speed
-speedster
-speedy
+speed,speed
+speedster,speed
+speedy,speed
 spicy,spice
 spolie,spoolie
 spooley,spoolie
@@ -743,7 +744,7 @@ superblack,super black
 supercharged,super charged
 superfine,super fine
 superfood,super food
-superior
+superior,super
 supersmooth,super smooth
 superstar,super star
 superstars,super star
@@ -786,7 +787,6 @@ velvetdrop,velvet
 velveteen,velvet
 velvetmatte,velvet matte
 velvety,velvet
-velvy
 venon,venom
 violet,purple
 voluminous,volume

@@ -318,34 +318,12 @@ def top_n_recommendations_unique(recommendations, target_makeup_part, target_mak
         sorted_recommendations = recommendations.sort_values(by='score', ascending=False)
     else:
          sorted_recommendations = recommendations  # No sorting if neither 'score' nor 'score_svd' exists
-    
-    sorted_recommendations_df = sorted_recommendations[sorted_recommendations['makeup_type'] == target_makeup_type]
-    print("Total sorted_recommendations_df with makeup_type:", len(sorted_recommendations_df))
 
-    print("Total sorted_recommendations:", len(sorted_recommendations))
     unique_recommendations = sorted_recommendations.drop_duplicates(subset=['product_name'])
     print("Total unique_recommendations:", len(unique_recommendations))
 
-    # Ensure the necessary columns exist before filtering
-    # if 'makeup_part' in unique_recommendations.columns:
-    #     makeup_part_len = unique_recommendations[unique_recommendations['makeup_part'] == target_makeup_part]
-    #     print("Total unique makeup_part:", len(makeup_part_len))
-    # else:
-    #     print("Column 'makeup_part' not found in recommendations.")
-
-    # if 'sub_category' in unique_recommendations.columns:
-    #     makeup_type_len = unique_recommendations[unique_recommendations['sub_category'] == target_makeup_type]
-    #     print("Total unique sub_category:", len(makeup_type_len))
-    #     unique_recommendations_df = unique_recommendations[unique_recommendations['sub_category'] == target_makeup_type]
-    # else:
-    #     print("Column 'sub_category' not found in recommendations.")
-    #     unique_recommendations_df = unique_recommendations  # Default to all recommendations if 'sub_category' is missing
-
-    print(target_makeup_type)
     unique_recommendations_df = unique_recommendations[unique_recommendations['makeup_type'] == target_makeup_type]
-    # unique_recommendations_df = unique_recommendations[unique_recommendations['makeup_part'] == target_makeup_part]
     print("Total unique_recommendations_df with sub category:", len(unique_recommendations_df))
-    # Get the top-N recommendations
     top_n_recommendations_df = unique_recommendations_df.head(top_n)
 
     return top_n_recommendations_df
@@ -355,13 +333,13 @@ file = pd.read_csv('normalization_data.csv')
 file.columns = file.columns.str.strip()
 file["After"] = file["After"].fillna(file["Before"])
 norm_dict = pd.Series(file["After"].values, index=file["Before"]).to_dict()
-stemmer = SnowballStemmer("english")  # Bisa untuk bahasa lain juga seperti "german", "french"
+stemmer = SnowballStemmer("english")
 
 # Fungsi untuk normalisasi teks
 def normalize_text(text, norm_dict):
-    words = text.split()  # Pisahkan teks menjadi kata-kata
-    normalized_words = [norm_dict.get(word, word) for word in words]  # Ganti kata sesuai dictionary
-    return ' '.join(normalized_words)  # Gabungkan kembali kata-kata
+    words = text.split() 
+    normalized_words = [norm_dict.get(word, word) for word in words]
+    return ' '.join(normalized_words) 
 
 
 stop_words = set(stopwords.words('english'))
@@ -389,30 +367,16 @@ def preprocess_user_description(description, norm_dict):
     stemmed_words = [stemmer.stem(word) for word in words_without_stopwords]
     return ' '.join(stemmed_words)
 
-# def preprocess_user_description(description, norm_dict):
-#     description = description.lower()
-#     description = description.translate(str.maketrans(string.punctuation, " " * len(string.punctuation)))
-#     description = " ".join(description.split())
-#     description = normalize_text(description, norm_dict)
-#     words = nltk.word_tokenize(description)
-#     stemmed_words = [stemmer.stem(word) for word in words]
-#     return ' '.join(stemmed_words)
-
-
-
 def cbf_tfidf(makeup_part_input, product_category, user_id, skin_type='', skin_tone='', under_tone='', user_description='', product_id_refs=""):
-    # Pastikan combined_info berisi string dan mengganti NaN menjadi string kosong
-    products['combined_info'] = products['combined_info'].astype(str).fillna('')
-
     if isinstance(product_id_refs, int):
-        product_id_refs = [product_id_refs]  # Bungkus integer menjadi list
+        product_id_refs = [product_id_refs] 
 
     product_desc = []
-    product_names_to_remove = set()  # Set untuk menyimpan nama produk yang ingin dihapus
+    product_names_to_remove = set() 
 
     # Ambil deskripsi produk berdasarkan product_id_refs
     for product_id_ref in product_id_refs:
-        result = products[products["product_id"] == product_id_ref]["combined_info"]
+        result = products[products["product_id"] == product_id_ref]["combined_info_fix"]
         if not result.empty:
             product_desc.append(result.values[0])
             # Cari product_name untuk produk referensi dan tambahkan ke set
@@ -423,24 +387,24 @@ def cbf_tfidf(makeup_part_input, product_category, user_id, skin_type='', skin_t
             product_desc.append(None)  # Jika product_id tidak ditemukan, simpan None
 
     # Menampilkan hasil
-    print("Deskripsi produk:", product_desc)
+    print("CBF - Deskripsi produk:", product_desc)
 
     combined_description = f"{makeup_part_input} {product_category} suitable for skin tone {skin_tone} undertone {under_tone} skintype {skin_type} additional info {user_description} reference product {product_desc}"
     combined_description = preprocess_user_description(combined_description, norm_dict)
-    print("Combined Description:", combined_description)
+    print("CBF - Combined Description:", combined_description)
 
     tfidf = TfidfVectorizer()
-    tfidf_matrix = tfidf.fit_transform(products['combined_info'])
+    tfidf_matrix = tfidf.fit_transform(products['combined_info_fix'])
     target_tfidf = tfidf.transform([combined_description])
-    print("Jumlah kosa kata (vocabulary):", len(tfidf.vocabulary_))
+    # print("Jumlah kosa kata (vocabulary):", len(tfidf.vocabulary_))
 
     # Identifikasi produk yang sudah dan belum diberi rating
     all_items = products['product_id'].unique()
-    rated_items = set(product_id_refs)
-    recommend_item = [item for item in all_items if item not in rated_items]
+    ref_items = set(product_id_refs)
+    recommend_item = [item for item in all_items if item not in ref_items]
 
-    print("Jumlah produk total:", len(all_items))
-    print("Jumlah produk yang sudah dikurangi reference:", len(recommend_item))
+    print("CBF - Jumlah produk total:", len(all_items))
+    print("CBF - Jumlah produk yang sudah dikurangi reference:", len(recommend_item))
 
     cosine_sim = cosine_similarity(target_tfidf, tfidf_matrix)
     similarity_scores = list(enumerate(cosine_sim[0]))
@@ -454,19 +418,18 @@ def cbf_tfidf(makeup_part_input, product_category, user_id, skin_type='', skin_t
             "makeup_part": products['makeup_part'].iloc[i],
             "makeup_type": products['makeup_type'].iloc[i],
             "shade_name": products['shade_name'].iloc[i],
-            "combined_info": products['combined_info'].iloc[i],
+            "combined_info_fix": products['combined_info_fix'].iloc[i],
             "score": float(score)
         }
         for i, score in sorted_similar_items if products['product_id'].iloc[i] in recommend_item and products['product_name'].iloc[i] not in product_names_to_remove
     ]
 
-    similar_products_filtered_df = pd.DataFrame(similar_products_filtered, columns=['product_id', 'product_name', 'makeup_part', 'makeup_type', 'shade_name', 'combined_info', 'score'])
+    similar_products_filtered_df = pd.DataFrame(similar_products_filtered, columns=['product_id', 'product_name', 'makeup_part', 'makeup_type', 'shade_name', 'combined_info_fix', 'score'])
 
+    print("CBF - Jumlah produk yang namanya tidak sama dengan referensi:", len(similar_products_filtered_df))
     sorted_df = similar_products_filtered_df.sort_values(by='score', ascending=False)
 
     return sorted_df, makeup_part_input, product_category
-
-
 
 
 @app.route('/recommend/tfidf', methods=['GET'])
@@ -482,14 +445,12 @@ def recommend_tfidf():
     top_n = request.args.get('top_n', default=10, type=int)  # Added top_n parameter
     product_id_refs = request.args.get('product_id_refs', type=int)
 
-    # Call the recommendation function
     similar_products, target_makeup_part, target_makeup_type = cbf_tfidf(
         makeup_part_input, product_category, user_id, skin_type, skin_tone, under_tone, user_description,product_id_refs
     )
 
     recommendations_df = top_n_recommendations_unique(similar_products, target_makeup_part, target_makeup_type, top_n)
 
-    # Create response
     response = {
         'recommendations': recommendations_df.to_dict(orient='records'),
         'makeup_part': target_makeup_part,
@@ -500,7 +461,7 @@ def recommend_tfidf():
 
 
 def svd(makeup_part_input, product_category, user_id):
-    print(product_category)
+    # print(product_category)
     # Load model dari file
     model_path = 'svd_model_new.pkl'
     with open(model_path, 'rb') as model_file:
@@ -510,11 +471,10 @@ def svd(makeup_part_input, product_category, user_id):
     user_ratings = data[data['user_id'] == user_id]
     rated_items = user_ratings['product_id'].unique()
     unrated_products = [item for item in all_items if item not in rated_items]
-    print('Produk keseluruhan',len(all_items))
-    print('Produk yang sudah di rating',len(rated_items))
-    print('Produk yang belum di rating',len(unrated_products))
+    print('SVD - Produk keseluruhan:',len(all_items))
+    print('SVD - Produk yang sudah di rating:',len(rated_items))
+    print('SVD - Produk yang belum di rating:',len(unrated_products))
 
-    # Prediksi untuk semua produk yang belum dirating oleh user dan gabungkan sub-category
     predictions = []
     for product_id in unrated_products:
         pred = model.predict(user_id, product_id)
@@ -525,7 +485,7 @@ def svd(makeup_part_input, product_category, user_id):
     predictions_df = pd.DataFrame(predictions, columns=['product_id', 'score_svd'])
 
     merged_recommendations = predictions_df.merge(
-        products[['product_id', 'product_name', 'makeup_part', 'makeup_type', 'shade_name', 'combined_info']],
+        products[['product_id', 'product_name', 'makeup_part', 'makeup_type', 'shade_name', 'combined_info_fix']],
         on='product_id',
         how='left'
     )
@@ -562,44 +522,36 @@ def hybrid_tfidf(makeup_part_input, product_category, user_id,
     similar_products, target_makeup_part, target_makeup_type = cbf_tfidf(
         makeup_part_input, product_category, user_id, skin_type, skin_tone, under_tone, user_description,product_id_refs
     )
-    print("CBF (Word2Vec) done.")
+    print("HYBRID - CBF done.")
 
     # Collaborative Filtering
     normalized_df, target_makeup_part, target_makeup_type = svd(makeup_part_input, product_category, user_id)
-    
-    print("Length of similar_products:", len(similar_products))
-    print("Length of normalized_df:", len(normalized_df))
+    print("HYBRID - CF done.")
+
+    print("HYBRID - Length of similar_products:", len(similar_products))
+    print("HYBRID - Length of normalized_df:", len(normalized_df))
 
     # Combine the results from CBF and SVD
     combined_df = pd.merge(similar_products, normalized_df, on='product_id', how='inner')
     # print("Combined DataFrame created.")
-    print("Length of combined_df:", len(combined_df))
-
-    # Get all items and unrated items
-    all_items = products['product_id'].unique()
-    user_ratings = data[data['user_id'] == user_id]
-    rated_items = user_ratings['product_id'].unique()
-    unrated_items = [item for item in all_items if item not in rated_items]
-
-    print(len(rated_items))
+    print("HYBRID - Length of combined_df:", len(combined_df))
     print(cbf_weight)
     print(cf_weight)
+    total_weight=cf_weight+cbf_weight
+    print(total_weight)
 
     # Apply the combined scoring from CBF and CF
-    combined_df['final_score'] = (cbf_weight * combined_df['score']) + (cf_weight * combined_df['score_svd'])
+    combined_df['final_score'] = (cbf_weight/total_weight * combined_df['score']) + (cf_weight/total_weight * combined_df['score_svd'])
 
-    # Filter combined_df to include only unrated items
-    combined_df_unrated = combined_df[combined_df['product_id'].isin(unrated_items)]
     # Sort the filtered results by the final score
-    combined_df_sorted = combined_df_unrated.sort_values(by='final_score', ascending=False)
-    combined_df_sorted = combined_df_sorted.drop(columns=['product_name_y', 'makeup_part_y', 'makeup_type_y', 'shade_name_y', 'combined_info_y'])
-    combined_df_sorted = combined_df_sorted.rename(columns={'product_name_x': 'product_name', 'makeup_part_x': 'makeup_part', 'makeup_type_x': 'makeup_type', 'shade_name_x':'shade_name', 'combined_info_x':'combined_info'})
+    combined_df_sorted = combined_df.sort_values(by='final_score', ascending=False)
+    combined_df_sorted = combined_df_sorted.drop(columns=['product_name_y', 'makeup_part_y', 'makeup_type_y', 'shade_name_y', 'combined_info_fix_y'])
+    combined_df_sorted = combined_df_sorted.rename(columns={'product_name_x': 'product_name', 'makeup_part_x': 'makeup_part', 'makeup_type_x': 'makeup_type', 'shade_name_x':'shade_name', 'combined_info_fix_x':'combined_info_fix'})
 
     return combined_df_sorted, makeup_part_input, product_category
 
 @app.route('/recommend/hybrid_tfidf', methods=['GET'])
 def recommend_hybrid_tfidf():
-    # Get parameters from the query string
     makeup_part_input = request.args.get('makeup_part_input', default='', type=str)
     product_category = request.args.get('product_category', default='', type=str)
     user_id = request.args.get('user_id', type=int)
