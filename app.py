@@ -24,7 +24,7 @@ nltk.download('stopwords')
 
 app = Flask(__name__)
 CORS(app)
-client= MongoClient('mongodb+srv://doadmin:529zS670DBC3go8u@db-mongodb-sgp1-49969-e6fddd19.mongo.ondigitalocean.com/admin?tls=true&authSource=admin&replicaSet=db-mongodb-sgp1-49969')
+client= MongoClient('mongodb://mongo:fuYTxZYAznDtdjmAXqfPXMIqwfPbEseK@monorail.proxy.rlwy.net:43049/')
 
 # client= MongoClient('mongodb://new_user:user_password@188.166.182.4:27017/?authSource=admin')
 # client= MongoClient('mongodb://localhost:27017/')
