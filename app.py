@@ -13,8 +13,8 @@ from datetime import datetime
 import nltk
 from nltk.stem import SnowballStemmer
 import string
-import string
-import nltk
+# import string
+# import nltk
 from nltk.corpus import stopwords
 import pandas as pd
 
@@ -24,9 +24,9 @@ nltk.download('stopwords')
 
 app = Flask(__name__)
 CORS(app)
-client= MongoClient('mongodb://mongo:fuYTxZYAznDtdjmAXqfPXMIqwfPbEseK@monorail.proxy.rlwy.net:43049/')
+# client= MongoClient('mongodb://mongo:fuYTxZYAznDtdjmAXqfPXMIqwfPbEseK@monorail.proxy.rlwy.net:43049/')
 
-# client= MongoClient('mongodb://new_user:user_password@188.166.182.4:27017/?authSource=admin')
+client= MongoClient('mongodb+srv://doadmin:G14u9H0d62ke8Sn7@db-mongodb-sgp1-99873-6d23c143.mongo.ondigitalocean.com/admin?authSource=admin&tls=true')
 # client= MongoClient('mongodb://localhost:27017/')
 
 db = client['makeup_product']
