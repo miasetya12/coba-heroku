@@ -26,8 +26,8 @@ app = Flask(__name__)
 CORS(app)
 # client= MongoClient('mongodb://mongo:fuYTxZYAznDtdjmAXqfPXMIqwfPbEseK@monorail.proxy.rlwy.net:43049/')
 
-client= MongoClient('mongodb+srv://doadmin:G14u9H0d62ke8Sn7@db-mongodb-sgp1-99873-6d23c143.mongo.ondigitalocean.com/admin?authSource=admin&tls=true')
-# client= MongoClient('mongodb://localhost:27017/')
+# client= MongoClient('mongodb+srv://doadmin:G14u9H0d62ke8Sn7@db-mongodb-sgp1-99873-6d23c143.mongo.ondigitalocean.com/admin?authSource=admin&tls=true')
+client= MongoClient('mongodb://localhost:27017/')
 
 db = client['makeup_product']
 collection =  db['desc_product_full']
@@ -392,19 +392,19 @@ def cbf_tfidf(makeup_part_input, product_category, user_id, skin_type='', skin_t
     combined_description = f"{makeup_part_input} {product_category} suitable for skin tone {skin_tone} undertone {under_tone} skintype {skin_type} additional info {user_description} reference product {product_desc}"
     combined_description = preprocess_user_description(combined_description, norm_dict)
     print("CBF - Combined Description:", combined_description)
-
-    tfidf = TfidfVectorizer()
-    tfidf_matrix = tfidf.fit_transform(products['combined_info_fix'])
-    target_tfidf = tfidf.transform([combined_description])
-    # print("Jumlah kosa kata (vocabulary):", len(tfidf.vocabulary_))
-
-    # Identifikasi produk yang sudah dan belum diberi rating
+    
     all_items = products['product_id'].unique()
     ref_items = set(product_id_refs)
     recommend_item = [item for item in all_items if item not in ref_items]
 
     print("CBF - Jumlah produk total:", len(all_items))
     print("CBF - Jumlah produk yang sudah dikurangi reference:", len(recommend_item))
+
+    tfidf = TfidfVectorizer()
+    tfidf_matrix = tfidf.fit_transform(products['combined_info_fix'])
+    target_tfidf = tfidf.transform([combined_description])
+    # print("Jumlah kosa kata (vocabulary):", len(tfidf.vocabulary_))
+
 
     cosine_sim = cosine_similarity(target_tfidf, tfidf_matrix)
     similarity_scores = list(enumerate(cosine_sim[0]))
@@ -461,8 +461,6 @@ def recommend_tfidf():
 
 
 def svd(makeup_part_input, product_category, user_id):
-    # print(product_category)
-    # Load model dari file
     model_path = 'svd_model_new.pkl'
     with open(model_path, 'rb') as model_file:
         model = pickle.load(model_file)
