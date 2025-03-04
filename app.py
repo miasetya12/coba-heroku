@@ -25,7 +25,7 @@ nltk.download('stopwords')
 app = Flask(__name__)
 CORS(app)
 # client= MongoClient('mongodb://mongo:fuYTxZYAznDtdjmAXqfPXMIqwfPbEseK@monorail.proxy.rlwy.net:43049/')
-client= MongoClient('mongodb+srv://doadmin:8QFT7YxE3D619K02@db-mongodb-sgp1-30194-865b4968.mongo.ondigitalocean.com/admin?tls=true&authSource=admin')
+client= MongoClient('mongodb+srv://doadmin:wZt21e4K9S8T067b@db-mongodb-sgp1-81035-5b89e6f3.mongo.ondigitalocean.com/admin?tls=true&authSource=admin')
 # client= MongoClient('mongodb://localhost:27017/')
 
 db = client['makeup_product']
@@ -36,6 +36,8 @@ ratings_collection = db['review_product']
 user_collection = db['user_information']
 recommendations_collection =  db['relevan_product_survei']
 order_collection =  db['order_scenario']
+recommendations_collection_2 =  db['relevan_product_survei_2']
+order_collection_2 =  db['order_scenario_2']
 data = pd.DataFrame(list(ratings_collection.find()))
 products = pd.DataFrame(list(collection.find()))
 user = pd.DataFrame(list(user_collection.find()))
@@ -235,6 +237,110 @@ def save_recommendation():
             'timestamp': timestamp  # Simpan timestamp yang sudah dikonversi
         }
         recommendations_collection.insert_one(recommendation_data)
+        return jsonify({'message': 'Recommendation saved successfully'}), 200
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/save_order_2', methods=['POST'])
+def save_order_2():
+    try:
+        # Ambil data dari request
+        data = request.get_json()
+
+        # Validasi data
+        if not data or "user_id" not in data or "order" not in data:
+            return jsonify({"message": "Invalid input. 'user_id' and 'order' are required."}), 400
+
+        user_id = data["user_id"]
+        order = data["order"]
+
+        # Validasi format order
+        if not isinstance(order, dict) or len(order) != 7:
+            return jsonify({"message": "Invalid 'order'. Must be a dictionary with 7 positions."}), 400
+
+        for key in ["first", "second", "third", "fourth", "fifth", "sixth", "seventh"]:
+            if key not in order or not order[key]:
+                return jsonify({"message": f"Missing or invalid value for position '{key}'."}), 400
+
+        # Ambil timestamp dari data (timestamp yang ada di request body)
+        timestamp = data.get('timestamp')
+
+        # Pastikan timestamp ada dan valid
+        if not timestamp:
+            return jsonify({'error': 'Timestamp is required'}), 400
+
+        # Mengonversi timestamp dari milidetik ke detik, lalu ke format yang lebih mudah dibaca
+        readable_timestamp = datetime.fromtimestamp(timestamp / 1000).strftime('%Y-%m-%d %H:%M:%S')  # Dari milidetik ke detik
+
+        # Buat data untuk disimpan
+        order_data = {
+            "user_id": user_id,
+            "order": order,
+            "timestamp": readable_timestamp  # Format timestamp yang lebih mudah dibaca
+        }
+
+        # Simpan ke MongoDB dan ambil hasilnya
+        result = order_collection_2.insert_one(order_data)
+        saved_order = order_collection_2.find_one({"_id": result.inserted_id})
+
+        # Konversi _id menjadi string untuk JSON serializable
+        saved_order["_id"] = str(saved_order["_id"])
+
+        # Kembalikan respons sukses
+        return jsonify({"message": "Order saved successfully", "data": saved_order}), 200
+
+    except Exception as e:
+        print(f"Error saving order: {e}")
+        return jsonify({"message": "Error saving order", "error": str(e)}), 500
+
+@app.route('/save_recommendation_2', methods=['POST'])
+def save_recommendation_2():
+    # Mengambil data dari body request
+    data = request.get_json()
+
+    # Validasi data
+    if not data or 'user_id' not in data or 'recommendations' not in data:
+        return jsonify({'error': 'Invalid data format'}), 400
+    
+    user_id = data['user_id']
+    recommendations = data['recommendations']
+    timestamp = data.get('timestamp')  # Ambil timestamp dari request
+
+    # Pastikan timestamp ada
+    if not timestamp:
+        return jsonify({'error': 'Timestamp is required'}), 400
+
+    # Mengonversi timestamp ke format yang lebih mudah dibaca
+    timestamp = datetime.fromtimestamp(timestamp / 1000).strftime('%Y-%m-%d %H:%M:%S')  # Dari milidetik ke detik
+
+    # Memastikan recommendations adalah list
+    if not isinstance(recommendations, list):
+        return jsonify({'error': 'Recommendations must be an array'}), 400
+
+    # Validasi setiap rekomendasi
+    for scenario in recommendations:
+        if 'scenario' not in scenario or 'products' not in scenario:
+            return jsonify({'error': 'Each recommendation must include scenario and products'}), 400
+        if not isinstance(scenario['products'], list):
+            return jsonify({'error': 'Products must be a list'}), 400
+        for product in scenario['products']:
+            # Validasi tambahan untuk revOrNot dan order
+            if 'product_id' not in product or 'revOrNot' not in product or 'order' not in product:
+                return jsonify({'error': 'Each product must include product_id, revOrNot, and order'}), 400
+            if not isinstance(product['revOrNot'], (bool, type(None))):
+                return jsonify({'error': 'revOrNot must be a boolean or null'}), 400
+            if not isinstance(product['order'], int) or not (0 <= product['order'] <= 5):
+                return jsonify({'error': 'order must be an integer between 0 and 5'}), 400
+
+    # Simpan data ke MongoDB, sertakan timestamp
+    try:
+        recommendation_data = {
+            'user_id': user_id,
+            'recommendations': recommendations,
+            'timestamp': timestamp  # Simpan timestamp yang sudah dikonversi
+        }
+        recommendations_collection_2.insert_one(recommendation_data)
         return jsonify({'message': 'Recommendation saved successfully'}), 200
     except Exception as e:
         return jsonify({'error': str(e)}), 500
@@ -460,7 +566,7 @@ def recommend_tfidf():
 
 
 def svd(makeup_part_input, product_category, user_id):
-    model_path = 'svd_model_new.pkl'
+    model_path = 'svd_model_new_1.pkl'
     with open(model_path, 'rb') as model_file:
         model = pickle.load(model_file)
     
@@ -577,6 +683,224 @@ def recommend_hybrid_tfidf():
 
     return jsonify(response)
 
+
+
+def svd2(makeup_part_input, product_category, user_id):
+    model_path = 'svd_model_new_2.pkl'
+    with open(model_path, 'rb') as model_file:
+        model = pickle.load(model_file)
+    
+    all_items = products['product_id'].unique()
+    user_ratings = data[data['user_id'] == user_id]
+    rated_items = user_ratings['product_id'].unique()
+    unrated_products = [item for item in all_items if item not in rated_items]
+    print('SVD - Produk keseluruhan:',len(all_items))
+    print('SVD - Produk yang sudah di rating:',len(rated_items))
+    print('SVD - Produk yang belum di rating:',len(unrated_products))
+
+    predictions = []
+    for product_id in unrated_products:
+        pred = model.predict(user_id, product_id)
+        predicted_score = pred.est
+        predictions.append((product_id, predicted_score))
+
+    # Buat DataFrame dari hasil prediksi
+    predictions_df = pd.DataFrame(predictions, columns=['product_id', 'score_svd'])
+
+    merged_recommendations = predictions_df.merge(
+        products[['product_id', 'product_name', 'makeup_part', 'makeup_type', 'shade_name', 'combined_info_fix']],
+        on='product_id',
+        how='left'
+    )
+    
+    normalized_df = normalize_ratings(merged_recommendations, 'score_svd')
+    sorted_df = normalized_df.sort_values(by='score_svd', ascending=False)
+    
+    return sorted_df, makeup_part_input, product_category
+@app.route('/recommend/svd2', methods=['GET'])
+def recommend_svd2():
+    user_id = request.args.get('user_id', type=int)
+    makeup_part_input = request.args.get('makeup_part_input', default='', type=str)
+    product_category = request.args.get('product_category', default='', type=str)
+    top_n = request.args.get('top_n', default=10, type=int)
+
+    recommendations, target_makeup_part, target_makeup_type = svd2(
+        makeup_part_input, product_category,user_id
+    )
+
+    recommendations_df = top_n_recommendations_unique(recommendations, target_makeup_part, target_makeup_type, top_n)
+
+    response = {
+        'recommendations': recommendations_df.to_dict(orient='records'),
+        'makeup_part': target_makeup_part,
+        'makeup_type': target_makeup_type
+    }
+    return jsonify(response)
+
+def hybrid_tfidf2(makeup_part_input, product_category, user_id, 
+                 skin_type='', skin_tone='', under_tone='', user_description='',product_id_refs='',
+                 cbf_weight=None, cf_weight=None):
+   
+    # Content-Based Filtering
+    similar_products, target_makeup_part, target_makeup_type = cbf_tfidf(
+        makeup_part_input, product_category, user_id, skin_type, skin_tone, under_tone, user_description,product_id_refs
+    )
+    print("HYBRID - CBF done.")
+
+    # Collaborative Filtering
+    normalized_df, target_makeup_part, target_makeup_type = svd2(makeup_part_input, product_category, user_id)
+    print("HYBRID - CF done.")
+
+    print("HYBRID - Length of similar_products:", len(similar_products))
+    print("HYBRID - Length of normalized_df:", len(normalized_df))
+
+    # Combine the results from CBF and SVD
+    combined_df = pd.merge(similar_products, normalized_df, on='product_id', how='inner')
+    # print("Combined DataFrame created.")
+    print("HYBRID - Length of combined_df:", len(combined_df))
+    print(cbf_weight)
+    print(cf_weight)
+    total_weight=cf_weight+cbf_weight
+    print(total_weight)
+
+    # Apply the combined scoring from CBF and CF
+    combined_df['final_score'] = (cbf_weight/total_weight * combined_df['score']) + (cf_weight/total_weight * combined_df['score_svd'])
+
+    # Sort the filtered results by the final score
+    combined_df_sorted = combined_df.sort_values(by='final_score', ascending=False)
+    combined_df_sorted = combined_df_sorted.drop(columns=['product_name_y', 'makeup_part_y', 'makeup_type_y', 'shade_name_y', 'combined_info_fix_y'])
+    combined_df_sorted = combined_df_sorted.rename(columns={'product_name_x': 'product_name', 'makeup_part_x': 'makeup_part', 'makeup_type_x': 'makeup_type', 'shade_name_x':'shade_name', 'combined_info_fix_x':'combined_info_fix'})
+
+    return combined_df_sorted, makeup_part_input, product_category
+
+@app.route('/recommend/hybrid_tfidf2', methods=['GET'])
+def recommend_hybrid_tfidf2():
+    makeup_part_input = request.args.get('makeup_part_input', default='', type=str)
+    product_category = request.args.get('product_category', default='', type=str)
+    user_id = request.args.get('user_id', type=int)
+    skin_type = request.args.get('skin_type', default='', type=str)
+    skin_tone = request.args.get('skin_tone', default='', type=str)
+    under_tone = request.args.get('under_tone', default='', type=str)
+    user_description = request.args.get('user_description', default='', type=str)
+    top_n = request.args.get('top_n', default=10, type=int)
+    cbf_weight = request.args.get('cbf_weight', default=None, type=float)
+    cf_weight = request.args.get('cf_weight', default=None, type=float)
+    product_id_refs = request.args.get('product_id_refs', type=int)
+
+    recommendations_df, target_makeup_part, target_makeup_type = hybrid_tfidf2(
+        makeup_part_input, product_category, user_id, 
+        skin_type, skin_tone, under_tone, user_description,product_id_refs,
+        cbf_weight=cbf_weight, cf_weight=cf_weight
+    )
+
+    recommendations_df = top_n_recommendations_unique(recommendations_df, target_makeup_part, target_makeup_type, top_n)
+  
+    response = {
+        'recommendations': recommendations_df.to_dict(orient='records'),
+        'makeup_part': target_makeup_part,
+        'makeup_type': target_makeup_type
+    }
+
+    return jsonify(response)
+
+
+
+def calculate_score(data):
+    correct_order = [1, 2, 3, 4, 5]  # Urutan ideal
+    scores = []
+
+    recommended_orders = [item["order"] for item in data]
+
+    for i, order in enumerate(recommended_orders):  
+        try:
+            correct_pos = correct_order.index(order)
+            if correct_pos == i:
+                scores.append(3)
+            elif abs(correct_pos - i) == 1:
+                scores.append(2)
+            else:
+                scores.append(1)
+        except ValueError:
+            scores.append(0)
+
+    return scores
+
+def dcg_at_k(relevance_scores, k):
+    relevance_scores = np.array(relevance_scores)[:k]
+    denominators = np.log2(np.arange(2, k + 2))
+    dcg = np.sum((2**relevance_scores - 1) / denominators)
+    return dcg
+
+# def ndcg_for_all(relevance_scores):
+#     k = len(relevance_scores)
+#     dcg = dcg_at_k(relevance_scores, k)
+#     ideal_relevance_scores = sorted(relevance_scores, reverse=True)
+#     idcg = dcg_at_k(ideal_relevance_scores, k)
+#     ndcg = dcg / idcg* 100 if idcg > 0 else 0
+#     return dcg, idcg, ndcg
+
+# def calculate_precision(data):
+#     relevant_items = sum(1 for item in data if item["revOrNot"])
+#     precision = relevant_items / len(data) *100 if data else 0
+#     return precision
+
+def ndcg_for_all(relevance_scores):
+    k = len(relevance_scores)
+    dcg = dcg_at_k(relevance_scores, k)
+    ideal_relevance_scores = sorted(relevance_scores, reverse=True)
+    idcg = dcg_at_k(ideal_relevance_scores, k)
+    ndcg = (dcg / idcg * 100) if idcg > 0 else 0
+    
+    # Membulatkan ke dua angka desimal
+    return round(dcg, 2), round(idcg, 2), round(ndcg, 2)
+
+def calculate_precision(data):
+    relevant_items = sum(1 for item in data if item["revOrNot"])
+    precision = (relevant_items / len(data) * 100) if data else 0
+    
+    # Membulatkan ke dua angka desimal
+    return round(precision, 2)
+
+
+@app.route('/evaluate', methods=['POST'])
+def evaluate():
+    request_data = request.json
+
+    if not request_data or "recommendations" not in request_data:
+        return jsonify({"error": "Invalid input format"}), 400
+
+    user_id = request_data.get("user_id", None)
+    recommendations = request_data["recommendations"]
+
+    results = []
+
+    for scenario_data in recommendations:
+        scenario = scenario_data["scenario"]
+        products = scenario_data["products"]
+
+        # Hitung skor
+        scores = calculate_score(products)
+
+        # Hitung NDCG
+        dcg, idcg, ndcg = ndcg_for_all(scores)
+
+        # Hitung Precision
+        precision = calculate_precision(products)
+
+        results.append({
+            "scenario": scenario,
+            "dcg": dcg,
+            "idcg": idcg,
+            "ndcg": ndcg,
+            "precision": precision
+        })
+
+    response = {
+        "user_id": user_id,
+        "results": results
+    }
+
+    return jsonify(response)
 
 if __name__ == "__main__":
     app.run(debug=True)
