@@ -6,15 +6,12 @@ from sklearn.metrics.pairwise import cosine_similarity
 from bson.json_util import dumps
 import numpy as np
 from surprise import Dataset, Reader, SVD, accuracy
-import string
 import pickle
 from flask_cors import CORS # type: ignore
 from datetime import datetime
 import nltk
 from nltk.stem import SnowballStemmer
 import string
-# import string
-# import nltk
 from nltk.corpus import stopwords
 import pandas as pd
 
