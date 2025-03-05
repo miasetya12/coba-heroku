@@ -25,7 +25,7 @@ nltk.download('stopwords')
 app = Flask(__name__)
 CORS(app)
 # client= MongoClient('mongodb://mongo:fuYTxZYAznDtdjmAXqfPXMIqwfPbEseK@monorail.proxy.rlwy.net:43049/')
-client= MongoClient('mongodb+srv://doadmin:wZt21e4K9S8T067b@db-mongodb-sgp1-81035-5b89e6f3.mongo.ondigitalocean.com/admin?tls=true&authSource=admin')
+client= MongoClient('mongodb+srv://doadmin:QY27SLx30H65p48E@db-mongodb-sgp1-58847-e89b5eef.mongo.ondigitalocean.com/admin?tls=true&authSource=admin')
 # client= MongoClient('mongodb://localhost:27017/')
 
 db = client['makeup_product']
@@ -686,7 +686,7 @@ def recommend_hybrid_tfidf():
 
 
 def svd2(makeup_part_input, product_category, user_id):
-    model_path = 'svd_model_new_2.pkl'
+    model_path = 'svd_model_new_3.pkl'
     with open(model_path, 'rb') as model_file:
         model = pickle.load(model_file)
     
