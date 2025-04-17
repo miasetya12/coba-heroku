@@ -14,7 +14,7 @@ from nltk.stem import SnowballStemmer
 import string
 from nltk.corpus import stopwords
 import pandas as pd
-
+from bson import ObjectId
 # Pastikan NLTK komponen yang diperlukan telah di-download
 nltk.download('punkt')
 nltk.download('stopwords')
@@ -27,8 +27,6 @@ client= MongoClient('mongodb://localhost:27017/')
 
 db = client['makeup_product']
 collection =  db['desc_product_full']
-# ratings_collection = db['review_product_81k_v']
-# user_collection = db['user_information_81k_v']
 ratings_collection = db['review_product']
 user_collection = db['user_information']
 recommendations_collection =  db['relevan_product_survei']
@@ -48,15 +46,12 @@ def register():
     skintype = data.get("skintype")
     undertone = data.get("undertone")
 
-    # Validasi jika username sudah ada
     if user_collection.find_one({"username": username}):
         return jsonify({"error": "Username already exists"}), 400
 
-    # Ambil user_id terakhir
-    last_user = user_collection.find_one(sort=[("user_id", -1)])  # Mengambil user dengan user_id tertinggi
-    new_user_id = last_user["user_id"] + 1 if last_user else 1  # Jika tidak ada user sebelumnya, mulai dari 1
+    last_user = user_collection.find_one(sort=[("user_id", -1)])  
+    new_user_id = last_user["user_id"] + 1 if last_user else 1 
 
-    # Simpan user baru dengan data tambahan di MongoDB
     user_collection.insert_one({
         "name": name,
         "username": username,
@@ -68,13 +63,11 @@ def register():
     
     return jsonify({"message": "User registered successfully", "user_id": new_user_id}), 201
 
-
 @app.route('/login', methods=['POST'])
 def login():
     data = request.get_json()
     username = data.get("username")
 
-    # Periksa apakah username ada di database
     if username is None:
         return jsonify({"error": "Username is required"}), 400
 
@@ -95,10 +88,7 @@ def get_user_reviews(user_id):
 @app.route('/submit_rating', methods=['POST'])
 def submit_rating():
     try:
-        # Ambil data input dari request JSON
         data = request.get_json()
-
-        # Validasi input
         if not all(key in data for key in ('user_id', 'product_id', 'stars')):
             return jsonify({"error": "Missing required fields"}), 400
 
@@ -106,22 +96,18 @@ def submit_rating():
         product_id = data['product_id']
         stars = data['stars']
 
-        # Jika ID berbentuk angka, tidak perlu konversi ke ObjectId
-        # Pastikan ID adalah angka atau string
         try:
-            user_id = int(user_id)  # Mengubah ke integer
-            product_id = int(product_id)  # Mengubah ke integer
+            user_id = int(user_id) 
+            product_id = int(product_id) 
         except ValueError:
             return jsonify({"error": "User ID and Product ID must be numeric"}), 400
 
-        # Cek apakah produk dan user ada di database
         product = collection.find_one({"product_id": product_id})
         user = user_collection.find_one({"user_id": user_id})
 
         if not product or not user:
             return jsonify({"error": "User or Product not found"}), 404
 
-        # Menyimpan rating ke dalam ratings_collection
         rating_data = {
             "user_id": user_id,
             "product_id": product_id,
@@ -138,17 +124,13 @@ def submit_rating():
 @app.route('/save_order', methods=['POST'])
 def save_order():
     try:
-        # Ambil data dari request
         data = request.get_json()
-
-        # Validasi data
         if not data or "user_id" not in data or "order" not in data:
             return jsonify({"message": "Invalid input. 'user_id' and 'order' are required."}), 400
 
         user_id = data["user_id"]
         order = data["order"]
 
-        # Validasi format order
         if not isinstance(order, dict) or len(order) != 7:
             return jsonify({"message": "Invalid 'order'. Must be a dictionary with 7 positions."}), 400
 
@@ -156,31 +138,23 @@ def save_order():
             if key not in order or not order[key]:
                 return jsonify({"message": f"Missing or invalid value for position '{key}'."}), 400
 
-        # Ambil timestamp dari data (timestamp yang ada di request body)
         timestamp = data.get('timestamp')
 
-        # Pastikan timestamp ada dan valid
         if not timestamp:
             return jsonify({'error': 'Timestamp is required'}), 400
 
-        # Mengonversi timestamp dari milidetik ke detik, lalu ke format yang lebih mudah dibaca
-        readable_timestamp = datetime.fromtimestamp(timestamp / 1000).strftime('%Y-%m-%d %H:%M:%S')  # Dari milidetik ke detik
-
-        # Buat data untuk disimpan
+        readable_timestamp = datetime.fromtimestamp(timestamp / 1000).strftime('%Y-%m-%d %H:%M:%S')  
         order_data = {
             "user_id": user_id,
             "order": order,
             "timestamp": readable_timestamp  # Format timestamp yang lebih mudah dibaca
         }
 
-        # Simpan ke MongoDB dan ambil hasilnya
         result = order_collection.insert_one(order_data)
         saved_order = order_collection.find_one({"_id": result.inserted_id})
 
-        # Konversi _id menjadi string untuk JSON serializable
         saved_order["_id"] = str(saved_order["_id"])
 
-        # Kembalikan respons sukses
         return jsonify({"message": "Order saved successfully", "data": saved_order}), 200
 
     except Exception as e:
@@ -189,36 +163,26 @@ def save_order():
 
 @app.route('/save_recommendation', methods=['POST'])
 def save_recommendation():
-    # Mengambil data dari body request
     data = request.get_json()
-
-    # Validasi data
     if not data or 'user_id' not in data or 'recommendations' not in data:
         return jsonify({'error': 'Invalid data format'}), 400
     
     user_id = data['user_id']
     recommendations = data['recommendations']
-    timestamp = data.get('timestamp')  # Ambil timestamp dari request
-
-    # Pastikan timestamp ada
+    timestamp = data.get('timestamp') 
     if not timestamp:
         return jsonify({'error': 'Timestamp is required'}), 400
 
-    # Mengonversi timestamp ke format yang lebih mudah dibaca
-    timestamp = datetime.fromtimestamp(timestamp / 1000).strftime('%Y-%m-%d %H:%M:%S')  # Dari milidetik ke detik
-
-    # Memastikan recommendations adalah list
+    timestamp = datetime.fromtimestamp(timestamp / 1000).strftime('%Y-%m-%d %H:%M:%S')  
     if not isinstance(recommendations, list):
         return jsonify({'error': 'Recommendations must be an array'}), 400
 
-    # Validasi setiap rekomendasi
     for scenario in recommendations:
         if 'scenario' not in scenario or 'products' not in scenario:
             return jsonify({'error': 'Each recommendation must include scenario and products'}), 400
         if not isinstance(scenario['products'], list):
             return jsonify({'error': 'Products must be a list'}), 400
         for product in scenario['products']:
-            # Validasi tambahan untuk revOrNot dan order
             if 'product_id' not in product or 'revOrNot' not in product or 'order' not in product:
                 return jsonify({'error': 'Each product must include product_id, revOrNot, and order'}), 400
             if not isinstance(product['revOrNot'], (bool, type(None))):
@@ -226,33 +190,27 @@ def save_recommendation():
             if not isinstance(product['order'], int) or not (0 <= product['order'] <= 5):
                 return jsonify({'error': 'order must be an integer between 0 and 5'}), 400
 
-    # Simpan data ke MongoDB, sertakan timestamp
     try:
         recommendation_data = {
             'user_id': user_id,
             'recommendations': recommendations,
-            'timestamp': timestamp  # Simpan timestamp yang sudah dikonversi
+            'timestamp': timestamp  
         }
         recommendations_collection.insert_one(recommendation_data)
         return jsonify({'message': 'Recommendation saved successfully'}), 200
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
-
 @app.route('/save_order_2', methods=['POST'])
 def save_order_2():
     try:
-        # Ambil data dari request
         data = request.get_json()
-
-        # Validasi data
         if not data or "user_id" not in data or "order" not in data:
             return jsonify({"message": "Invalid input. 'user_id' and 'order' are required."}), 400
 
         user_id = data["user_id"]
         order = data["order"]
 
-        # Validasi format order
         if not isinstance(order, dict) or len(order) != 7:
             return jsonify({"message": "Invalid 'order'. Must be a dictionary with 7 positions."}), 400
 
@@ -260,31 +218,22 @@ def save_order_2():
             if key not in order or not order[key]:
                 return jsonify({"message": f"Missing or invalid value for position '{key}'."}), 400
 
-        # Ambil timestamp dari data (timestamp yang ada di request body)
         timestamp = data.get('timestamp')
-
-        # Pastikan timestamp ada dan valid
         if not timestamp:
             return jsonify({'error': 'Timestamp is required'}), 400
 
-        # Mengonversi timestamp dari milidetik ke detik, lalu ke format yang lebih mudah dibaca
-        readable_timestamp = datetime.fromtimestamp(timestamp / 1000).strftime('%Y-%m-%d %H:%M:%S')  # Dari milidetik ke detik
-
-        # Buat data untuk disimpan
+      
+        readable_timestamp = datetime.fromtimestamp(timestamp / 1000).strftime('%Y-%m-%d %H:%M:%S')  
         order_data = {
             "user_id": user_id,
             "order": order,
-            "timestamp": readable_timestamp  # Format timestamp yang lebih mudah dibaca
+            "timestamp": readable_timestamp  
         }
 
-        # Simpan ke MongoDB dan ambil hasilnya
         result = order_collection_2.insert_one(order_data)
         saved_order = order_collection_2.find_one({"_id": result.inserted_id})
-
-        # Konversi _id menjadi string untuk JSON serializable
         saved_order["_id"] = str(saved_order["_id"])
 
-        # Kembalikan respons sukses
         return jsonify({"message": "Order saved successfully", "data": saved_order}), 200
 
     except Exception as e:
@@ -293,80 +242,64 @@ def save_order_2():
 
 @app.route('/save_recommendation_2', methods=['POST'])
 def save_recommendation_2():
-    # Mengambil data dari body request
     data = request.get_json()
-
-    # Validasi data
     if not data or 'user_id' not in data or 'recommendations' not in data:
         return jsonify({'error': 'Invalid data format'}), 400
     
     user_id = data['user_id']
     recommendations = data['recommendations']
-    timestamp = data.get('timestamp')  # Ambil timestamp dari request
-
-    # Pastikan timestamp ada
+    timestamp = data.get('timestamp') 
     if not timestamp:
         return jsonify({'error': 'Timestamp is required'}), 400
 
-    # Mengonversi timestamp ke format yang lebih mudah dibaca
     timestamp = datetime.fromtimestamp(timestamp / 1000).strftime('%Y-%m-%d %H:%M:%S')  # Dari milidetik ke detik
 
-    # Memastikan recommendations adalah list
     if not isinstance(recommendations, list):
         return jsonify({'error': 'Recommendations must be an array'}), 400
 
-    # Validasi setiap rekomendasi
     for scenario in recommendations:
         if 'scenario' not in scenario or 'products' not in scenario:
             return jsonify({'error': 'Each recommendation must include scenario and products'}), 400
         if not isinstance(scenario['products'], list):
             return jsonify({'error': 'Products must be a list'}), 400
         for product in scenario['products']:
-            # Validasi tambahan untuk revOrNot dan order
             if 'product_id' not in product or 'revOrNot' not in product or 'order' not in product:
                 return jsonify({'error': 'Each product must include product_id, revOrNot, and order'}), 400
             if not isinstance(product['revOrNot'], (bool, type(None))):
                 return jsonify({'error': 'revOrNot must be a boolean or null'}), 400
             if not isinstance(product['order'], int) or not (0 <= product['order'] <= 5):
                 return jsonify({'error': 'order must be an integer between 0 and 5'}), 400
-
-    # Simpan data ke MongoDB, sertakan timestamp
     try:
         recommendation_data = {
             'user_id': user_id,
             'recommendations': recommendations,
-            'timestamp': timestamp  # Simpan timestamp yang sudah dikonversi
+            'timestamp': timestamp 
         }
         recommendations_collection_2.insert_one(recommendation_data)
         return jsonify({'message': 'Recommendation saved successfully'}), 200
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
-
-from bson import ObjectId
-
 @app.route('/user/<user_id>', methods=['GET'])
 def get_user_data(user_id):
     try:
-        user_id = int(user_id)  # Ensure the user_id is an integer
+        user_id = int(user_id)  
     except ValueError:
-        return jsonify({"message": "Invalid user ID"}), 400  # Return a 400 if user_id is not a valid integer
-
-    user = user_collection.find_one({"user_id": user_id})  # Use find_one for a single document
+        return jsonify({"message": "Invalid user ID"}), 400  
+    user = user_collection.find_one({"user_id": user_id})  
 
     if user:
-        # Convert ObjectId to string before returning the response
-        user['_id'] = str(user['_id'])  # Convert the _id field to a string
-        return jsonify(user), 200  # Return the user data directly
+        user['_id'] = str(user['_id'])  
+        return jsonify(user), 200 
     else:
-        return jsonify({"message": "No user found"}), 404  # 404 if no user is found
+        return jsonify({"message": "No user found"}), 404  
 
 @app.route('/user', methods=['GET'])
 def get_all_user():
     """Fetch all product descriptions from MongoDB."""
     try:
-        user = user_collection.find()  # Sort by price in ascending order
-        return dumps(user)  # Use dumps for JSON serialization
+        user = user_collection.find() 
+        return dumps(user) 
     except Exception as e:
         return jsonify({"error": str(e)}), 500
     
@@ -374,30 +307,27 @@ def get_all_user():
 def get_all_products():
     """Fetch all product descriptions from MongoDB."""
     try:
-        # products = collection.find()
-        products = collection.find().sort('jumlah_review', 1)  # Sort by price in ascending order
-        return dumps(products)  # Use dumps for JSON serialization
+        products = collection.find().sort('jumlah_review', 1) 
+        return dumps(products)
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
 @app.route('/products/popular', methods=['GET'])
 def get_popular_products():
-    """Fetch all product descriptions from MongoDB."""
     try:
-        products = collection.find().sort("price", -1).limit(50)  # Sort by price in ascending order
-        return dumps(products)  # Use dumps for JSON serialization
+        products = collection.find().sort("price", -1).limit(50)  
+        return dumps(products) 
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
-@app.route('/products/<int:product_id>', methods=['GET'])  # Mengubah tipe parameter ke int
+@app.route('/products/<int:product_id>', methods=['GET']) 
 def get_product(product_id):
-    """Fetch a product description by ID from MongoDB."""
     try:
-        print(f"Received product_id: {product_id}")  # Debugging line
-        product = collection.find_one({"product_id": product_id})  # Query menggunakan product_id sebagai Int
+        print(f"Received product_id: {product_id}")  
+        product = collection.find_one({"product_id": product_id}) 
         if product:
             print(product) 
-            return dumps(product)  # Serialize the product data
+            return dumps(product)
         else:
             return jsonify({"error": "Product not found"}), 404
     except Exception as e:
@@ -409,7 +339,6 @@ def normalize_ratings(df, column_name):
     df.loc[:, column_name] = (df[column_name] - min_rating) / (max_rating - min_rating)
     return df
 
-
 def top_n_recommendations_unique(recommendations, target_makeup_part, target_makeup_type, top_n):
 
     if 'final_score' in recommendations.columns:
@@ -419,7 +348,7 @@ def top_n_recommendations_unique(recommendations, target_makeup_part, target_mak
     elif 'score' in recommendations.columns:
         sorted_recommendations = recommendations.sort_values(by='score', ascending=False)
     else:
-         sorted_recommendations = recommendations  # No sorting if neither 'score' nor 'score_svd' exists
+         sorted_recommendations = recommendations
 
     unique_recommendations = sorted_recommendations.drop_duplicates(subset=['product_name'])
     print("Total unique_recommendations:", len(unique_recommendations))
@@ -430,28 +359,24 @@ def top_n_recommendations_unique(recommendations, target_makeup_part, target_mak
 
     return top_n_recommendations_df
 
-
 file = pd.read_csv('normalization_data.csv')
 file.columns = file.columns.str.strip()
 file["After"] = file["After"].fillna(file["Before"])
 norm_dict = pd.Series(file["After"].values, index=file["Before"]).to_dict()
 stemmer = SnowballStemmer("english")
 
-# Fungsi untuk normalisasi teks
 def normalize_text(text, norm_dict):
     words = text.split() 
     normalized_words = [norm_dict.get(word, word) for word in words]
     return ' '.join(normalized_words) 
 
-
 stop_words = set(stopwords.words('english'))
 file_path = "list stopword.xlsx"
 df = pd.read_excel(file_path)
 
-# Menambahkan stopwords tambahan dari kolom 'Hapus' jika kolom ada
 if 'Hapus' in df.columns:
-    additional_stopwords = set(df['Hapus'].dropna().astype(str))  # Pastikan konversi ke string
-    stop_words.update(additional_stopwords)  # Gabungkan dengan stopwords bawaan
+    additional_stopwords = set(df['Hapus'].dropna().astype(str)) 
+    stop_words.update(additional_stopwords) 
 else:
     print("Kolom 'Hapus' tidak ditemukan dalam file Excel.")
 
@@ -476,19 +401,16 @@ def cbf_tfidf(makeup_part_input, product_category, user_id, skin_type='', skin_t
     product_desc = []
     product_names_to_remove = set() 
 
-    # Ambil deskripsi produk berdasarkan product_id_refs
     for product_id_ref in product_id_refs:
         result = products[products["product_id"] == product_id_ref]["combined_info_fix"]
         if not result.empty:
             product_desc.append(result.values[0])
-            # Cari product_name untuk produk referensi dan tambahkan ke set
             product_name = products[products["product_id"] == product_id_ref]["product_name"].values[0]
             product_names_to_remove.add(product_name)
             print(f"Berhasil ditambah produk: {product_name}")
         else:
-            product_desc.append(None)  # Jika product_id tidak ditemukan, simpan None
+            product_desc.append(None) 
 
-    # Menampilkan hasil
     print("CBF - Deskripsi produk:", product_desc)
 
     combined_description = f"{makeup_part_input} {product_category} suitable for skin tone {skin_tone} undertone {under_tone} skintype {skin_type} additional info {user_description} reference product {product_desc}"
@@ -505,14 +427,10 @@ def cbf_tfidf(makeup_part_input, product_category, user_id, skin_type='', skin_t
     tfidf = TfidfVectorizer()
     tfidf_matrix = tfidf.fit_transform(products['combined_info_fix'])
     target_tfidf = tfidf.transform([combined_description])
-    # print("Jumlah kosa kata (vocabulary):", len(tfidf.vocabulary_))
-
-
+   
     cosine_sim = cosine_similarity(target_tfidf, tfidf_matrix)
     similarity_scores = list(enumerate(cosine_sim[0]))
     sorted_similar_items = sorted(similarity_scores, key=lambda x: x[1], reverse=True)
-
-    # Filter rekomendasi produk yang belum diberi rating dan menghapus produk dengan nama yang sama
     similar_products_filtered = [
         {
             "product_id": int(products['product_id'].iloc[i]),
@@ -521,12 +439,14 @@ def cbf_tfidf(makeup_part_input, product_category, user_id, skin_type='', skin_t
             "makeup_type": products['makeup_type'].iloc[i],
             "shade_name": products['shade_name'].iloc[i],
             "combined_info_fix": products['combined_info_fix'].iloc[i],
+            "image_url": products['image_url'].iloc[i],
+            "price": products['price'].iloc[i],
             "score": float(score)
         }
         for i, score in sorted_similar_items if products['product_id'].iloc[i] in recommend_item and products['product_name'].iloc[i] not in product_names_to_remove
     ]
 
-    similar_products_filtered_df = pd.DataFrame(similar_products_filtered, columns=['product_id', 'product_name', 'makeup_part', 'makeup_type', 'shade_name', 'combined_info_fix', 'score'])
+    similar_products_filtered_df = pd.DataFrame(similar_products_filtered, columns=['product_id', 'product_name', 'makeup_part', 'makeup_type', 'shade_name', 'combined_info_fix', 'image_url',"price", 'score'])
 
     print("CBF - Jumlah produk yang namanya tidak sama dengan referensi:", len(similar_products_filtered_df))
     sorted_df = similar_products_filtered_df.sort_values(by='score', ascending=False)
@@ -536,7 +456,6 @@ def cbf_tfidf(makeup_part_input, product_category, user_id, skin_type='', skin_t
 
 @app.route('/recommend/tfidf', methods=['GET'])
 def recommend_tfidf():
-    # Get parameters from query string
     makeup_part_input = request.args.get('makeup_part_input', default='', type=str)
     product_category = request.args.get('product_category', default='', type=str)
     user_id = request.args.get('user_id', type=int)
@@ -561,7 +480,6 @@ def recommend_tfidf():
 
     return jsonify(response)
 
-
 def svd(makeup_part_input, product_category, user_id):
     model_path = 'svd_model_new_1.pkl'
     with open(model_path, 'rb') as model_file:
@@ -581,7 +499,6 @@ def svd(makeup_part_input, product_category, user_id):
         predicted_score = pred.est
         predictions.append((product_id, predicted_score))
 
-    # Buat DataFrame dari hasil prediksi
     predictions_df = pd.DataFrame(predictions, columns=['product_id', 'score_svd'])
 
     merged_recommendations = predictions_df.merge(
@@ -614,44 +531,37 @@ def recommend_svd():
     }
     return jsonify(response)
 
-def hybrid_tfidf(makeup_part_input, product_category, user_id, 
+def hybrid_1(makeup_part_input, product_category, user_id, 
                  skin_type='', skin_tone='', under_tone='', user_description='',product_id_refs='',
                  cbf_weight=None, cf_weight=None):
    
-    # Content-Based Filtering
     similar_products, target_makeup_part, target_makeup_type = cbf_tfidf(
         makeup_part_input, product_category, user_id, skin_type, skin_tone, under_tone, user_description,product_id_refs
     )
     print("HYBRID - CBF done.")
 
-    # Collaborative Filtering
     normalized_df, target_makeup_part, target_makeup_type = svd(makeup_part_input, product_category, user_id)
     print("HYBRID - CF done.")
 
     print("HYBRID - Length of similar_products:", len(similar_products))
     print("HYBRID - Length of normalized_df:", len(normalized_df))
 
-    # Combine the results from CBF and SVD
     combined_df = pd.merge(similar_products, normalized_df, on='product_id', how='inner')
-    # print("Combined DataFrame created.")
     print("HYBRID - Length of combined_df:", len(combined_df))
     print(cbf_weight)
     print(cf_weight)
     total_weight=cf_weight+cbf_weight
     print(total_weight)
 
-    # Apply the combined scoring from CBF and CF
     combined_df['final_score'] = (cbf_weight/total_weight * combined_df['score']) + (cf_weight/total_weight * combined_df['score_svd'])
-
-    # Sort the filtered results by the final score
     combined_df_sorted = combined_df.sort_values(by='final_score', ascending=False)
     combined_df_sorted = combined_df_sorted.drop(columns=['product_name_y', 'makeup_part_y', 'makeup_type_y', 'shade_name_y', 'combined_info_fix_y'])
     combined_df_sorted = combined_df_sorted.rename(columns={'product_name_x': 'product_name', 'makeup_part_x': 'makeup_part', 'makeup_type_x': 'makeup_type', 'shade_name_x':'shade_name', 'combined_info_fix_x':'combined_info_fix'})
 
     return combined_df_sorted, makeup_part_input, product_category
 
-@app.route('/recommend/hybrid_tfidf', methods=['GET'])
-def recommend_hybrid_tfidf():
+@app.route('/recommend/hybrid_1', methods=['GET'])
+def recommend_hybrid_1():
     makeup_part_input = request.args.get('makeup_part_input', default='', type=str)
     product_category = request.args.get('product_category', default='', type=str)
     user_id = request.args.get('user_id', type=int)
@@ -664,7 +574,7 @@ def recommend_hybrid_tfidf():
     cf_weight = request.args.get('cf_weight', default=None, type=float)
     product_id_refs = request.args.get('product_id_refs', type=int)
 
-    recommendations_df, target_makeup_part, target_makeup_type = hybrid_tfidf(
+    recommendations_df, target_makeup_part, target_makeup_type = hybrid_1(
         makeup_part_input, product_category, user_id, 
         skin_type, skin_tone, under_tone, user_description,product_id_refs,
         cbf_weight=cbf_weight, cf_weight=cf_weight
@@ -701,7 +611,6 @@ def svd2(makeup_part_input, product_category, user_id):
         predicted_score = pred.est
         predictions.append((product_id, predicted_score))
 
-    # Buat DataFrame dari hasil prediksi
     predictions_df = pd.DataFrame(predictions, columns=['product_id', 'score_svd'])
 
     merged_recommendations = predictions_df.merge(
@@ -714,6 +623,7 @@ def svd2(makeup_part_input, product_category, user_id):
     sorted_df = normalized_df.sort_values(by='score_svd', ascending=False)
     
     return sorted_df, makeup_part_input, product_category
+
 @app.route('/recommend/svd2', methods=['GET'])
 def recommend_svd2():
     user_id = request.args.get('user_id', type=int)
@@ -734,7 +644,7 @@ def recommend_svd2():
     }
     return jsonify(response)
 
-def hybrid_tfidf2(makeup_part_input, product_category, user_id, 
+def hybrid_2(makeup_part_input, product_category, user_id, 
                  skin_type='', skin_tone='', under_tone='', user_description='',product_id_refs='',
                  cbf_weight=None, cf_weight=None):
    
@@ -753,7 +663,6 @@ def hybrid_tfidf2(makeup_part_input, product_category, user_id,
 
     # Combine the results from CBF and SVD
     combined_df = pd.merge(similar_products, normalized_df, on='product_id', how='inner')
-    # print("Combined DataFrame created.")
     print("HYBRID - Length of combined_df:", len(combined_df))
     print(cbf_weight)
     print(cf_weight)
@@ -770,8 +679,8 @@ def hybrid_tfidf2(makeup_part_input, product_category, user_id,
 
     return combined_df_sorted, makeup_part_input, product_category
 
-@app.route('/recommend/hybrid_tfidf2', methods=['GET'])
-def recommend_hybrid_tfidf2():
+@app.route('/recommend/hybrid_2', methods=['GET'])
+def recommend_hybrid_2():
     makeup_part_input = request.args.get('makeup_part_input', default='', type=str)
     product_category = request.args.get('product_category', default='', type=str)
     user_id = request.args.get('user_id', type=int)
@@ -784,7 +693,7 @@ def recommend_hybrid_tfidf2():
     cf_weight = request.args.get('cf_weight', default=None, type=float)
     product_id_refs = request.args.get('product_id_refs', type=int)
 
-    recommendations_df, target_makeup_part, target_makeup_type = hybrid_tfidf2(
+    recommendations_df, target_makeup_part, target_makeup_type = hybrid_2(
         makeup_part_input, product_category, user_id, 
         skin_type, skin_tone, under_tone, user_description,product_id_refs,
         cbf_weight=cbf_weight, cf_weight=cf_weight
@@ -827,19 +736,6 @@ def dcg_at_k(relevance_scores, k):
     denominators = np.log2(np.arange(2, k + 2))
     dcg = np.sum((2**relevance_scores - 1) / denominators)
     return dcg
-
-# def ndcg_for_all(relevance_scores):
-#     k = len(relevance_scores)
-#     dcg = dcg_at_k(relevance_scores, k)
-#     ideal_relevance_scores = sorted(relevance_scores, reverse=True)
-#     idcg = dcg_at_k(ideal_relevance_scores, k)
-#     ndcg = dcg / idcg* 100 if idcg > 0 else 0
-#     return dcg, idcg, ndcg
-
-# def calculate_precision(data):
-#     relevant_items = sum(1 for item in data if item["revOrNot"])
-#     precision = relevant_items / len(data) *100 if data else 0
-#     return precision
 
 def ndcg_for_all(relevance_scores):
     k = len(relevance_scores)
