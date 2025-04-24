@@ -83,7 +83,15 @@ def get_user_reviews(user_id):
     if reviews:
         return jsonify({"reviews": reviews}), 200
     else:
-        return jsonify({"message": "No reviews found for this user"}), 404
+        return jsonify({"message": "No reviews found for this user"}), 200
+  
+@app.route('/reviewsb/<user_id>', methods=['GET'])
+def get_user_reviewsb(user_id):
+    reviews = list(ratings_collection.find({"user_id": int(user_id)}, {"_id": 0, "product_id": 1, "stars": 1}))
+    if reviews:
+        return jsonify({"reviews": reviews}), 200
+    else:
+        return jsonify({"message": "No reviews found for this user"}), 400
   
 @app.route('/submit_rating', methods=['POST'])
 def submit_rating():
