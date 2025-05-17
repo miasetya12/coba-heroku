@@ -10,10 +10,12 @@ import pickle
 from flask_cors import CORS # type: ignore
 from datetime import datetime
 import nltk
+import re
 from nltk.stem import SnowballStemmer
 import string
 from nltk.corpus import stopwords
 import pandas as pd
+from googletrans import Translator
 from bson import ObjectId
 # Pastikan NLTK komponen yang diperlukan telah di-download
 nltk.download('punkt')
@@ -142,7 +144,7 @@ def save_order():
         if not isinstance(order, dict) or len(order) != 7:
             return jsonify({"message": "Invalid 'order'. Must be a dictionary with 7 positions."}), 400
 
-        for key in ["first", "second", "third", "fourth", "fifth", "sixth", "seventh"]:
+        for key in ["pertama", "kedua", "ketiga", "keempat", "kelima", "keenam", "ketujuh"]:
             if key not in order or not order[key]:
                 return jsonify({"message": f"Missing or invalid value for position '{key}'."}), 400
 
@@ -311,22 +313,148 @@ def get_all_user():
     except Exception as e:
         return jsonify({"error": str(e)}), 500
     
+# @app.route('/products', methods=['GET'])
+# def get_all_products():
+#     """Fetch all product descriptions from MongoDB."""
+#     try:
+#         products = collection.find().sort('price', 1) 
+#         return dumps(products)
+#     except Exception as e:
+#         return jsonify({"error": str(e)}), 500
+
 @app.route('/products', methods=['GET'])
 def get_all_products():
-    """Fetch all product descriptions from MongoDB."""
+    """Fetch all product descriptions from MongoDB, sorted by total sold."""
     try:
-        products = collection.find().sort('jumlah_review', 1) 
-        return dumps(products)
+        # Ambil statistik produk (rating average dan total sold)
+        product_stats = list(ratings_collection.aggregate([
+            {
+                '$group': {
+                    '_id': '$product_id',
+                    'avg_rating': {'$avg': '$stars'},
+                    'total_sold': {'$sum': 1}
+                }
+            },
+            {
+                '$project': {
+                    'product_id': '$_id',
+                    '_id': 0,
+                    'avg_rating': 1,
+                    'total_sold': 1
+                }
+            }
+        ]))
+
+        # Membuat dictionary untuk mudah pencocokan produk_id dan total_sold
+        stats_dict = {stat['product_id']: stat for stat in product_stats}
+
+        # Ambil semua produk dan gabungkan dengan data statistik
+        products = list(collection.find())
+        
+        for product in products:
+            # Dapatkan statistik produk jika ada
+            product_stat = stats_dict.get(product['product_id'], {'total_sold': 0})
+            # Tambahkan total_sold ke produk
+            product['total_sold'] = product_stat['total_sold']
+
+        # Urutkan berdasarkan total_sold
+        sorted_products = sorted(products, key=lambda x: x['total_sold'], reverse=True)
+        
+        return dumps(sorted_products)
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
-@app.route('/products/popular', methods=['GET'])
-def get_popular_products():
-    try:
-        products = collection.find().sort("price", -1).limit(50)  
-        return dumps(products) 
-    except Exception as e:
-        return jsonify({"error": str(e)}), 500
+@app.route('/product_stats', methods=['GET'])
+def get_product_stats():
+    pipeline = [
+        {
+            '$group': {
+                '_id': '$product_id',
+                'avg_rating': {'$avg': '$stars'},
+                'total_sold': {'$sum': 1}
+            }
+        },
+        {
+            '$project': {
+                'product_id': '$_id',
+                '_id': 0,
+                'avg_rating': 1,
+                'total_sold': 1
+            }
+        }
+    ]
+    
+    result = list(ratings_collection.aggregate(pipeline))
+    return jsonify(result)
+
+@app.route('/product_stats/<string:product_id>', methods=['GET'])
+def get_product_stat_by_id(product_id):
+    pipeline = [
+        {'$match': {'product_id': int(product_id)}},
+        {
+            '$group': {
+                '_id': '$product_id',
+                'avg_rating': {'$avg': '$stars'},
+                'total_sold': {'$sum': 1}
+            }
+        },
+        {
+            '$project': {
+                '_id': 0,
+                'product_id': '$_id',
+                'avg_rating': 1,
+                'total_sold': 1
+            }
+        }
+    ]
+    result = list(ratings_collection.aggregate(pipeline))
+    if result:
+        return jsonify(result[0])
+    else:
+        return jsonify({'product_id': product_id, 'avg_rating': 0, 'total_sold': 0})
+
+# @app.route('/products/popular', methods=['GET'])
+# def get_popular_products():
+#     try:
+#         products = collection.find().sort("price", -1).limit(50)  
+#         return dumps(products) 
+#     except Exception as e:
+#         return jsonify({"error": str(e)}), 500
+
+from flask import jsonify
+from bson.json_util import dumps
+from pymongo import DESCENDING
+
+# @app.route('/products/popular', methods=['GET'])
+# def get_popular_products():
+#     try:
+#         # Gabungkan data dari dua koleksi: products dan product_stats
+#         pipeline = [
+#             {
+#                 "$lookup": {
+#                     "from": "product_stats",  # nama koleksi stats
+#                     "localField": "product_id",  # field di koleksi product
+#                     "foreignField": "product_id",  # field di koleksi stats
+#                     "as": "stats"
+#                 }
+#             },
+#             {
+#                 "$unwind": "$stats"  # agar bisa akses langsung stats.total_sold
+#             },
+#             {
+#                 "$sort": {
+#                     "stats.total_sold": -1  # urutkan berdasarkan jumlah terjual
+#                 }
+#             },
+#             {
+#                 "$limit": 50
+#             }
+#         ]
+
+#         popular_products = list(collection.aggregate(pipeline))
+#         return dumps(popular_products)
+#     except Exception as e:
+#         return jsonify({"error": str(e)}), 500
 
 @app.route('/products/<int:product_id>', methods=['GET']) 
 def get_product(product_id):
@@ -392,7 +520,11 @@ def remove_stopwords(tokens):
     filtered_tokens = [word for word in tokens if word.lower() not in stop_words]
     return filtered_tokens
 
+translator = Translator()
 def preprocess_user_description(description, norm_dict):
+    description = translator.translate(description, src='id', dest='en').text
+    description = re.sub(r'[^a-zA-Z\s]', '', description)  # Remove non-ASCII characters, punctuation, and numbers
+    description = re.sub(r'\d+', '', description)
     description = description.lower()
     description = description.translate(str.maketrans(string.punctuation, " " * len(string.punctuation)))
     description = " ".join(description.split())
@@ -424,6 +556,7 @@ def cbf_tfidf(makeup_part_input, product_category, user_id, skin_type='', skin_t
     combined_description = f"{makeup_part_input} {product_category} suitable for skin tone {skin_tone} undertone {under_tone} skintype {skin_type} additional info {user_description} reference product {product_desc}"
     combined_description = preprocess_user_description(combined_description, norm_dict)
     print("CBF - Combined Description:", combined_description)
+    print(user_description)
     
     all_items = products['product_id'].unique()
     ref_items = set(product_id_refs)
